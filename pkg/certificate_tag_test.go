@@ -13,7 +13,7 @@
 // limitations under the License.
 // ========================================================================
 
-package main
+package pkg
 
 import (
 	"bytes"
@@ -645,7 +645,7 @@ func TestFindTag(t *testing.T) {
 	}
 
 	for _, e := range expect {
-		offset, length, err := findTag([]byte(e.in), e.start)
+		offset, length, err := FindTag([]byte(e.in), e.start)
 		if offset != e.offset {
 			t.Errorf("test %s, got offset %d, want %d", e.name, offset, e.offset)
 		}
@@ -688,7 +688,7 @@ func TestFindTag(t *testing.T) {
 		}
 
 		// No tag before tagging.
-		offset, _, err := findTag(contents, bin.certificateOffset())
+		offset, _, err := FindTag(contents, bin.CertificateOffset())
 		if err != nil {
 			t.Errorf("Case %d, error in findTag for untagged source %s: %v", i, e.infile, err)
 		}
@@ -703,7 +703,7 @@ func TestFindTag(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Case %d, error tagging source %s: %v", i, e.infile, err)
 		}
-		offset, length, err := findTag(contents, bin.certificateOffset())
+		offset, length, err := FindTag(contents, bin.CertificateOffset())
 		if err != nil {
 			t.Errorf("Case %d, error in findTag for source %s: %v", i, e.infile, err)
 		}

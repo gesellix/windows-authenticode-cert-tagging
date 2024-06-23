@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -28,7 +28,7 @@
 // signatures, that data can also be changed without invalidating it.
 //
 // The tool supports PE32 exe files and MSI files.
-package main
+package pkg
 
 import (
 	"bytes"
@@ -38,15 +38,10 @@ import (
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/big"
-	"os"
-	"strings"
 	"time"
 )
 
@@ -463,13 +458,13 @@ type signedData struct {
 // Binary represents a taggable binary of any format.
 type Binary interface {
 	AppendedTag() (data []byte, ok bool)
-	asn1Data() []byte
+	Asn1Data() []byte
 	buildBinary(asn1Data, tag []byte) ([]byte, error) // the tag argument is a legacy-style tag.
 	RemoveAppendedTag() (contents []byte, err error)
 	SetAppendedTag(tagContents []byte) (contents []byte, err error)
 	getSuperfluousCert() (cert *x509.Certificate, index int, err error)
 	SetSuperfluousCertTag(tag []byte) (contents []byte, err error)
-	certificateOffset() int64
+	CertificateOffset() int64
 }
 
 // PE32Binary represents a PE binary.
@@ -524,11 +519,11 @@ func NewPE32Binary(contents []byte) (*PE32Binary, error) {
 	}, nil
 }
 
-func (bin *PE32Binary) certificateOffset() int64 {
+func (bin *PE32Binary) CertificateOffset() int64 {
 	return int64(bin.attrCertOffset)
 }
 
-func (bin *PE32Binary) asn1Data() []byte {
+func (bin *PE32Binary) Asn1Data() []byte {
 	return bin.asn1Bytes
 }
 
@@ -576,12 +571,12 @@ func (bin *PE32Binary) RemoveAppendedTag() (contents []byte, err error) {
 		return nil, errors.New("authenticodetag: no appended tag found")
 	}
 
-	return bin.buildBinary(bin.asn1Data(), nil)
+	return bin.buildBinary(bin.Asn1Data(), nil)
 }
 
 // SetAppendedTag adds a legacy-style tag at the end of the signedData container.
 func (bin *PE32Binary) SetAppendedTag(tagContents []byte) (contents []byte, err error) {
-	return bin.buildBinary(bin.asn1Data(), tagContents)
+	return bin.buildBinary(bin.Asn1Data(), tagContents)
 }
 
 // oidChromeTag is an OID that we use for the extension in the superfluous
@@ -1072,7 +1067,7 @@ func (bin *MSIBinary) AppendedTag() (data []byte, ok bool) {
 	return nil, false
 }
 
-func (bin *MSIBinary) asn1Data() []byte {
+func (bin *MSIBinary) Asn1Data() []byte {
 	return bin.signedDataBytes
 }
 
@@ -1183,14 +1178,14 @@ func (bin *MSIBinary) SetSuperfluousCertTag(tag []byte) (contents []byte, err er
 	return bin.buildBinary(asn1Bytes, nil)
 }
 
-func (bin *MSIBinary) certificateOffset() int64 {
+func (bin *MSIBinary) CertificateOffset() int64 {
 	// The signedData will be written at the first free sector at the end of file.
 	return int64(offT(bin.firstFreeFatEntry()) * bin.sector.Size)
 }
 
 // findTag returns the offset of the superfluous-cert tag in |contents|, or (-1, 0) if not found.
 // The caller should restrict the search to the certificate section of the contents, if known.
-func findTag(contents []byte, start int64) (offset, length int64, err error) {
+func FindTag(contents []byte, start int64) (offset, length int64, err error) {
 	// An MSI can have a tagged Omaha inside of it, but that is the wrong tag -- it should be the
 	// one on the outermost container, or none.
 	contents = contents[start:]
@@ -1212,158 +1207,4 @@ func findTag(contents []byte, start int64) (offset, length int64, err error) {
 		return -1, 0, fmt.Errorf("failed in findTag, want tag buffer to fit in file size %d, but offset (%d) plus length (%d) is %d", lenContents, offset, length, offset+length)
 	}
 	return start + offset, length, nil
-}
-
-var (
-	dumpAppendedTag       *bool   = flag.Bool("dump-appended-tag", false, "If set, any appended tag is dumped to stdout.")
-	removeAppendedTag     *bool   = flag.Bool("remove-appended-tag", false, "If set, any appended tag is removed and the binary rewritten.")
-	loadAppendedTag       *string = flag.String("load-appended-tag", "", "If set, this flag contains a filename from which the contents of the appended tag will be saved")
-	setSuperfluousCertTag *string = flag.String("set-superfluous-cert-tag", "", "If set, this flag contains a string and a superfluous certificate tag with that value will be set and the binary rewritten. If the string begins with '0x' then it will be interpreted as hex")
-	paddedLength          *int    = flag.Int("padded-length", 0, "A superfluous cert tag will be padded with zeros to at least this number of bytes")
-	savePKCS7             *string = flag.String("save-pkcs7", "", "If set to a filename, the PKCS7 data from the original binary will be written to that file.")
-	outFilename           *string = flag.String("out", "", "If set, the updated binary is written to this file. Otherwise the binary is updated in place.")
-	printTagDetails       *bool   = flag.Bool("print-tag-details", false, "IF set, print to stdout the location and size of the superfluous cert's Gact2.0 marker plus buffer.")
-)
-
-func main() {
-	flag.Parse()
-	args := flag.Args()
-	if len(args) != 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s [flags] binary.exe\n", os.Args[0])
-		os.Exit(255)
-	}
-	inFilename := args[0]
-	if len(*outFilename) == 0 {
-		outFilename = &inFilename
-	}
-
-	contents, err := ioutil.ReadFile(inFilename)
-	if err != nil {
-		panic(err)
-	}
-
-	bin, err := NewBinary(contents)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", err)
-		os.Exit(1)
-	}
-
-	var finalContents []byte
-	didSomething := false
-
-	if len(*savePKCS7) > 0 {
-		if err := ioutil.WriteFile(*savePKCS7, bin.asn1Data(), 0644); err != nil {
-			fmt.Fprintf(os.Stderr, "Error while writing file: %s\n", err)
-			os.Exit(1)
-		}
-		didSomething = true
-	}
-
-	if *dumpAppendedTag {
-		appendedTag, ok := bin.AppendedTag()
-		if !ok {
-			fmt.Fprintf(os.Stderr, "No appended tag found\n")
-		} else {
-			os.Stdout.WriteString(hex.Dump(appendedTag))
-		}
-		didSomething = true
-	}
-
-	if *removeAppendedTag {
-		contents, err := bin.RemoveAppendedTag()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error while removing appended tag: %s\n", err)
-			os.Exit(1)
-		}
-		if err := ioutil.WriteFile(*outFilename, contents, 0644); err != nil {
-			fmt.Fprintf(os.Stderr, "Error while writing updated file: %s\n", err)
-			os.Exit(1)
-		}
-		finalContents = contents
-		didSomething = true
-	}
-
-	if len(*loadAppendedTag) > 0 {
-		tagContents, err := ioutil.ReadFile(*loadAppendedTag)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error while reading file: %s\n", err)
-			os.Exit(1)
-		}
-		contents, err := bin.SetAppendedTag(tagContents)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error while setting appended tag: %s\n", err)
-			os.Exit(1)
-		}
-		if err := ioutil.WriteFile(*outFilename, contents, 0644); err != nil {
-			fmt.Fprintf(os.Stderr, "Error while writing updated file: %s\n", err)
-			os.Exit(1)
-		}
-		finalContents = contents
-		didSomething = true
-	}
-
-	if len(*setSuperfluousCertTag) > 0 {
-		var tagContents []byte
-
-		if strings.HasPrefix(*setSuperfluousCertTag, "0x") {
-			tagContents, err = hex.DecodeString((*setSuperfluousCertTag)[2:])
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to parse tag contents from command line: %s\n", err)
-				os.Exit(1)
-			}
-		} else {
-			tagContents = []byte(*setSuperfluousCertTag)
-		}
-
-		for len(tagContents) < *paddedLength {
-			tagContents = append(tagContents, 0)
-		}
-		// print-tag-details only works if the length requires 2 bytes to specify. (The length bytes
-		// length is part of the search string.)
-		// Lorry only tags properly (aside from tag-in-zip) if the length is 8206 or more. b/173139534
-		// Omaha may or may not have a practical buffer size limit; 8206 is known to work.
-		if len(tagContents) < 0x100 || len(tagContents) > 0xffff {
-			fmt.Fprintf(os.Stderr, "Want final tag length in range [256, 65535], got %d\n", len(tagContents))
-			os.Exit(1)
-		}
-
-		contents, err := bin.SetSuperfluousCertTag(tagContents)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error while setting superfluous certificate tag: %s\n", err)
-			os.Exit(1)
-		}
-		if err := ioutil.WriteFile(*outFilename, contents, 0644); err != nil {
-			fmt.Fprintf(os.Stderr, "Error while writing updated file: %s\n", err)
-			os.Exit(1)
-		}
-		finalContents = contents
-		didSomething = true
-	}
-
-	if *printTagDetails {
-		if finalContents == nil {
-			// Re-read the input, as NewBinary() may modify it.
-			finalContents, err = ioutil.ReadFile(inFilename)
-			if err != nil {
-				panic(err)
-			}
-		}
-		offset, length, err := findTag(finalContents, bin.certificateOffset())
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error while searching for tag in file bytes: %s\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("Omaha Tag offset, length: (%d, %d)\n", offset, length)
-		didSomething = true
-	}
-
-	if !didSomething {
-		// By default, print basic information.
-		appendedTag, ok := bin.AppendedTag()
-		if !ok {
-			fmt.Printf("No appended tag\n")
-		} else {
-			fmt.Printf("Appended tag included, %d bytes\n", len(appendedTag))
-		}
-	}
 }
