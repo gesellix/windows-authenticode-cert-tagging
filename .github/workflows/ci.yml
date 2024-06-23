@@ -22,13 +22,13 @@ jobs:
         with:
           version: latest
           args: check
+      - name: Build
+        run: go build -o /tmp/certificate_tag -v ./cmd/certificate_tag.go
       - name: Check
         run: go test -v ./...
-      - name: Build
-        run: go build -o certificate_tag -v ./cmd/certificate_tag.go
       - name: Archive artifact
         uses: actions/upload-artifact@v4
         with:
           name: certificate_tag-linux
-          path: ./certificate_tag
+          path: /tmp/certificate_tag
 ...
