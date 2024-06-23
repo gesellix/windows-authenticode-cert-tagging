@@ -1,0 +1,57 @@
+---
+# Make sure to check the documentation at https://goreleaser.com/
+before:
+  hooks:
+    - go mod download
+    - go generate ./...
+builds:
+  - main: ./cmd/certificate_tag.go
+    env:
+      - CGO_ENABLED=0
+    # Default is `-s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}} -X main.builtBy=goreleaser`.
+    ldflags:
+      - -s -w -extldflags "-static" -X github.com/gesellix/windows-authenticode-cert-tagging.version={{.Version}} -X github.com/gesellix/windows-authenticode-cert-tagging.commit={{.ShortCommit}} -X github.com/gesellix/windows-authenticode-cert-tagging.buildTimestamp={{.Date}} -X github.com/gesellix/windows-authenticode-cert-tagging.builtBy=goreleaser`
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm
+      - arm64
+    goarm:
+      - "6"
+      - "7"
+    ignore:
+      - goos: darwin
+        goarch: "386"
+      - goos: linux
+        goarch: arm
+        goarm: "7"
+release:
+  draft: true
+archives:
+  - name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+checksum:
+  name_template: 'checksums.txt'
+snapshot:
+  name_template: "{{ .Tag }}-next"
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore'
+...
