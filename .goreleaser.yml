@@ -6,7 +6,7 @@ before:
     - go mod download
     - go generate ./...
 builds:
-  - main: ./cmd/certificate_tag.go
+  - main: ./cmd/certificate_tag/certificate_tag.go
     env:
       - CGO_ENABLED=0
     # Default is `-s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}} -X main.builtBy=goreleaser`.

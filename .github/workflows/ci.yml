@@ -23,7 +23,7 @@ jobs:
           version: latest
           args: check
       - name: Build
-        run: go build -o /tmp/certificate_tag -v ./cmd/certificate_tag.go
+        run: go build -o /tmp/certificate_tag -v ./cmd/certificate_tag/certificate_tag.go
       - name: Check
         run: go test -v ./...
       - name: Archive artifact
