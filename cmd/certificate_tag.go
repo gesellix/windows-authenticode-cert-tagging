@@ -35,7 +35,6 @@ import (
 	"flag"
 	"fmt"
 	"github.com/gesellix/windows-authenticode-cert-tagging/pkg"
-	"io/ioutil"
 	"os"
 	"strings"
 )
@@ -63,7 +62,7 @@ func main() {
 		outFilename = &inFilename
 	}
 
-	contents, err := ioutil.ReadFile(inFilename)
+	contents, err := os.ReadFile(inFilename)
 	if err != nil {
 		panic(err)
 	}
@@ -78,7 +77,7 @@ func main() {
 	didSomething := false
 
 	if len(*savePKCS7) > 0 {
-		if err := ioutil.WriteFile(*savePKCS7, bin.Asn1Data(), 0644); err != nil {
+		if err := os.WriteFile(*savePKCS7, bin.Asn1Data(), 0644); err != nil {
 			fmt.Fprintf(os.Stderr, "Error while writing file: %s\n", err)
 			os.Exit(1)
 		}
@@ -101,7 +100,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error while removing appended tag: %s\n", err)
 			os.Exit(1)
 		}
-		if err := ioutil.WriteFile(*outFilename, contents, 0644); err != nil {
+		if err := os.WriteFile(*outFilename, contents, 0644); err != nil {
 			fmt.Fprintf(os.Stderr, "Error while writing updated file: %s\n", err)
 			os.Exit(1)
 		}
@@ -110,7 +109,7 @@ func main() {
 	}
 
 	if len(*loadAppendedTag) > 0 {
-		tagContents, err := ioutil.ReadFile(*loadAppendedTag)
+		tagContents, err := os.ReadFile(*loadAppendedTag)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error while reading file: %s\n", err)
 			os.Exit(1)
@@ -120,7 +119,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error while setting appended tag: %s\n", err)
 			os.Exit(1)
 		}
-		if err := ioutil.WriteFile(*outFilename, contents, 0644); err != nil {
+		if err := os.WriteFile(*outFilename, contents, 0644); err != nil {
 			fmt.Fprintf(os.Stderr, "Error while writing updated file: %s\n", err)
 			os.Exit(1)
 		}
@@ -158,7 +157,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error while setting superfluous certificate tag: %s\n", err)
 			os.Exit(1)
 		}
-		if err := ioutil.WriteFile(*outFilename, contents, 0644); err != nil {
+		if err := os.WriteFile(*outFilename, contents, 0644); err != nil {
 			fmt.Fprintf(os.Stderr, "Error while writing updated file: %s\n", err)
 			os.Exit(1)
 		}
@@ -169,7 +168,7 @@ func main() {
 	if *printTagDetails {
 		if finalContents == nil {
 			// Re-read the input, as NewBinary() may modify it.
-			finalContents, err = ioutil.ReadFile(inFilename)
+			finalContents, err = os.ReadFile(inFilename)
 			if err != nil {
 				panic(err)
 			}
